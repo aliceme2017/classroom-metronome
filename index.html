@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#191816">
+<title>課堂節拍器</title>
+<style>
+:root{
+  --room:#191816; --chassis:#34322f; --chassis-hi:#423f3a; --line:#5a554c;
+  --silk:#ede6d6; --silk-dim:#a69e8e;
+  --key:#4a4641; --key-hi:#5f5a53; --key-shadow:#1c1a18;
+  --red:#e0412f; --red-dim:#5a2b23; --red-glow:rgba(224,65,47,.75);
+  --orange:#f2952a; --orange-dim:#5e4223; --orange-glow:rgba(242,149,42,.7);
+  --cream:#ede6d6; --cream-dim:#57534b; --cream-glow:rgba(237,230,214,.55);
+  --led:#ff3b2e; --led-off:#3b1915; --window:#130d0b;
+  --cap-shadow:#8d8676;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--room)}
+body{
+  color:var(--silk);
+  font-family:"Avenir Next","Segoe UI Variable Display","Segoe UI","PingFang TC","Microsoft JhengHei","Noto Sans TC",system-ui,sans-serif;
+  -webkit-tap-highlight-color:transparent;
+  user-select:none;-webkit-user-select:none;
+  touch-action:manipulation;
+  padding:clamp(0px,3vw,32px);
+}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ---------- 機身 ---------- */
+.device{
+  max-width:1180px;margin:0 auto;
+  background:var(--chassis);
+  border-radius:22px;
+  box-shadow:inset 0 1px 0 var(--chassis-hi),0 24px 60px rgba(0,0,0,.5);
+  padding:max(16px,env(safe-area-inset-top)) clamp(16px,3vw,36px) max(20px,env(safe-area-inset-bottom));
+  display:grid;gap:clamp(18px,2.6vw,28px);
+  grid-template-columns:1fr;
+  grid-template-areas:"head" "disp" "ctrl" "start" "keys";
+}
+@media (max-width:600px){
+  body{padding:0}
+  .device{border-radius:0;min-height:100vh;box-shadow:none}
+}
+header{grid-area:head;display:flex;align-items:baseline;justify-content:space-between}
+h1{margin:0;font-size:clamp(1.05rem,2.6vw,1.35rem);font-weight:700;letter-spacing:.22em;color:var(--silk)}
+.range-note{font-size:.9rem;color:var(--silk-dim);letter-spacing:.08em;font-variant-numeric:tabular-nums}
+
+/* ---------- LED 顯示窗 ---------- */
+.disp{grid-area:disp;display:flex;flex-direction:column;align-items:stretch;gap:clamp(14px,2vw,22px)}
+.window{
+  background:var(--window);border-radius:14px;
+  box-shadow:inset 0 4px 14px rgba(0,0,0,.85),0 0 0 2px #23211e,0 1px 0 2px var(--chassis-hi);
+  padding:clamp(14px,2.6vw,28px) clamp(16px,3vw,36px);
+  display:flex;align-items:flex-end;justify-content:center;gap:clamp(10px,2vw,22px);
+}
+.digits{display:flex;gap:clamp(4px,1vw,12px);filter:drop-shadow(0 0 12px rgba(255,59,46,.5))}
+.digits svg{height:clamp(96px,24vw,200px);width:auto;display:block}
+.seg{fill:var(--led-off)}
+.seg.on{fill:var(--led)}
+.unit{
+  display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding-bottom:.3em;
+  color:var(--led);font-weight:800;letter-spacing:.12em;
+  font-size:clamp(.95rem,2.4vw,1.35rem);
+  text-shadow:0 0 10px rgba(255,59,46,.6);
+}
+.unit .note{font-size:1.7em;line-height:1;letter-spacing:0}
+
+/* ---------- 拍點打擊墊 ---------- */
+.pads{display:flex;justify-content:center;gap:clamp(8px,2vw,22px);padding-top:4px}
+.pad-col{
+  --c:var(--cream);--dim:var(--cream-dim);--glow:var(--cream-glow);
+  flex:0 1 clamp(42px,12vw,100px);
+  display:flex;flex-direction:column;align-items:center;gap:10px;
+}
+.pad-col.accent{--c:var(--red);--dim:var(--red-dim);--glow:var(--red-glow)}
+.pad-col.second{--c:var(--orange);--dim:var(--orange-dim);--glow:var(--orange-glow)}
+.led{
+  width:12px;height:12px;border-radius:50%;background:var(--led-off);
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.6);
+  transition:background-color .12s,box-shadow .12s;
+}
+.pad{
+  width:100%;aspect-ratio:1;border-radius:10px;background:var(--dim);
+  box-shadow:inset 0 -5px 0 rgba(0,0,0,.22),0 4px 0 var(--key-shadow);
+  transition:background-color .14s,box-shadow .14s,transform .08s;
+}
+.num{font-weight:800;color:var(--silk-dim);font-variant-numeric:tabular-nums;font-size:clamp(.95rem,2.2vw,1.2rem)}
+.pad-col.accent .num{color:var(--red)}
+.pad-col.second .num{color:var(--orange)}
+.pad-col.on .pad{
+  background:var(--c);transform:translateY(2px);
+  box-shadow:inset 0 -5px 0 rgba(0,0,0,.12),0 2px 0 var(--key-shadow),0 0 34px 6px var(--glow);
+}
+.pad-col.on .led{background:var(--led);box-shadow:0 0 10px 3px var(--led)}
+/* 亮起要瞬間到位，熄滅時才淡出 */
+.pad-col.on .pad,.pad-col.on .led{transition:none}
+
+/* ---------- 控制區（絲印框） ---------- */
+.ctrl{grid-area:ctrl;display:flex;flex-direction:column;gap:clamp(22px,3vw,30px);padding-top:10px}
+.group{position:relative;border:1.5px solid var(--line);border-radius:14px;padding:24px 16px 16px}
+.legend{
+  position:absolute;top:-.8em;left:14px;padding:0 8px;background:var(--chassis);
+  color:var(--silk-dim);font-size:1rem;letter-spacing:.18em;
+}
+
+/* 推桿 */
+input[type=range]{
+  -webkit-appearance:none;appearance:none;width:100%;height:56px;background:transparent;margin:0 0 12px;cursor:pointer;
+}
+input[type=range]::-webkit-slider-runnable-track{
+  height:10px;border-radius:5px;background:#141311;box-shadow:inset 0 2px 3px rgba(0,0,0,.8),0 1px 0 var(--chassis-hi);
+}
+input[type=range]::-moz-range-track{
+  height:10px;border-radius:5px;background:#141311;box-shadow:inset 0 2px 3px rgba(0,0,0,.8),0 1px 0 var(--chassis-hi);
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:32px;height:54px;margin-top:-22px;border-radius:6px;border:0;
+  background:linear-gradient(to bottom,#f6f0e2 0 45%,#2b2825 45% 55%,#e2d9c6 55% 100%);
+  box-shadow:0 3px 0 var(--cap-shadow),0 6px 10px rgba(0,0,0,.5);
+}
+input[type=range]::-moz-range-thumb{
+  width:32px;height:54px;border-radius:6px;border:0;
+  background:linear-gradient(to bottom,#f6f0e2 0 45%,#2b2825 45% 55%,#e2d9c6 55% 100%);
+  box-shadow:0 3px 0 var(--cap-shadow),0 6px 10px rgba(0,0,0,.5);
+}
+
+/* 橡膠按鍵 */
+button{font:inherit;color:inherit;border:0;cursor:pointer;background:none}
+button:focus-visible,input:focus-visible{outline:3px solid var(--orange);outline-offset:4px}
+.key{
+  background:var(--key);color:var(--silk);border-radius:10px;font-weight:800;
+  box-shadow:inset 0 1px 0 var(--key-hi),0 4px 0 var(--key-shadow);
+  transition:transform .05s,box-shadow .05s,background-color .1s;
+}
+.key:active,.key.hit{transform:translateY(3px);box-shadow:inset 0 1px 0 var(--key-hi),0 1px 0 var(--key-shadow)}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.steps .key{height:clamp(54px,9vh,70px);font-size:clamp(1.3rem,4vw,1.75rem);font-variant-numeric:tabular-nums}
+
+.sigs{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.sigs .key{
+  height:clamp(66px,11vh,86px);font-size:clamp(1.35rem,4.4vw,1.9rem);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+  color:var(--silk-dim);
+}
+.sigs .key::before{
+  content:"";width:10px;height:10px;border-radius:50%;background:var(--led-off);
+  box-shadow:inset 0 1px 2px rgba(0,0,0,.6);
+}
+.sigs .key[aria-pressed=true]{color:var(--silk);background:var(--key-hi)}
+.sigs .key[aria-pressed=true]::before{background:var(--led);box-shadow:0 0 9px 2px var(--led)}
+
+.tap{
+  height:clamp(70px,11vh,92px);width:100%;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  font-size:clamp(1.3rem,4vw,1.65rem);letter-spacing:.04em;
+}
+.tap small{font-size:.92rem;font-weight:500;color:var(--silk-dim);letter-spacing:.04em}
+
+/* 開始／停止 */
+.start{
+  grid-area:start;width:100%;height:clamp(88px,15vh,140px);border-radius:16px;
+  background:var(--cream);color:#2a2724;
+  display:flex;align-items:center;justify-content:center;gap:clamp(14px,2.4vw,24px);
+  font-size:clamp(2rem,6.5vw,3rem);font-weight:800;letter-spacing:.3em;
+  box-shadow:inset 0 1px 0 #fffaf0,0 7px 0 var(--cap-shadow),0 12px 22px rgba(0,0,0,.45);
+  transition:transform .05s,box-shadow .05s,background-color .12s,color .12s;
+}
+.start:active{transform:translateY(5px);box-shadow:inset 0 1px 0 #fffaf0,0 2px 0 var(--cap-shadow),0 4px 10px rgba(0,0,0,.4)}
+.start .icon{
+  width:.62em;height:.7em;background:currentColor;
+  clip-path:polygon(0 0,100% 50%,0 100%);
+}
+.start.playing{background:var(--red);color:#fff;box-shadow:inset 0 1px 0 #f2735f,0 7px 0 #7a2018,0 12px 22px rgba(0,0,0,.45)}
+.start.playing:active{box-shadow:inset 0 1px 0 #f2735f,0 2px 0 #7a2018}
+.start.playing .icon{width:.6em;height:.6em;clip-path:none;border-radius:3px}
+
+.keys{grid-area:keys;text-align:center;color:var(--silk-dim);font-size:.9rem;letter-spacing:.04em}
+@media (hover:none){.keys{display:none}}
+
+@media (prefers-reduced-motion:reduce){
+  *{transition:none !important}
+}
+
+/* 投影機／橫向寬螢幕：左右兩欄 */
+@media (min-width:900px) and (orientation:landscape){
+  .device{
+    grid-template-columns:1.3fr 1fr;
+    grid-template-areas:"head head" "disp ctrl" "start ctrl" "keys keys";
+    column-gap:clamp(28px,3.5vw,48px);
+    align-items:start;
+  }
+  .digits svg{height:clamp(110px,min(16vw,26vh),230px)}
+  .start{height:clamp(80px,13vh,130px)}
+  .device{gap:clamp(14px,2.2vh,28px)}
+  .pad-col{flex-basis:clamp(44px,6vw,100px)}
+}
+</style>
+</head>
+<body>
+<main class="device">
+  <header>
+    <h1>課堂節拍器</h1>
+    <span class="range-note">40–240 BPM</span>
+  </header>
+
+  <section class="disp">
+    <div class="window">
+      <div class="digits" id="digits" aria-hidden="true"></div>
+      <div class="unit" aria-hidden="true">
+        <span class="note" id="noteGlyph">♩</span>
+        <span>BPM</span>
+      </div>
+      <span class="sr-only" id="bpmText" aria-live="polite">每分鐘 100 拍</span>
+    </div>
+    <div class="pads" id="pads" aria-hidden="true"></div>
+  </section>
+
+  <section class="ctrl">
+    <div class="group">
+      <span class="legend">速度</span>
+      <input type="range" id="slider" min="40" max="240" step="1" value="100" aria-label="BPM 速度">
+      <div class="steps">
+        <button type="button" class="key" data-step="-5" aria-label="減 5">−5</button>
+        <button type="button" class="key" data-step="-1" aria-label="減 1">−1</button>
+        <button type="button" class="key" data-step="1" aria-label="加 1">+1</button>
+        <button type="button" class="key" data-step="5" aria-label="加 5">+5</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <span class="legend">拍號</span>
+      <div class="sigs" id="sigs">
+        <button type="button" class="key" data-sig="2/4">2/4</button>
+        <button type="button" class="key" data-sig="3/4">3/4</button>
+        <button type="button" class="key" data-sig="4/4">4/4</button>
+        <button type="button" class="key" data-sig="6/8">6/8</button>
+      </div>
+    </div>
+
+    <button type="button" class="key tap" id="tap">Tap Tempo<small id="tapHint">跟著音樂連續點擊</small></button>
+  </section>
+
+  <button type="button" class="start" id="start" aria-pressed="false"><span class="icon" aria-hidden="true"></span><span id="startTxt">開始</span></button>
+
+  <div class="keys">鍵盤：空白鍵 開始／停止　↑ ↓ 調 ±1　← → 調 ±5　T 打拍　1–4 切換拍號</div>
+</main>
+
+<script>
+(() => {
+  'use strict';
+
+  /* ---------- 設定 ---------- */
+  const MIN = 40, MAX = 240;
+  const SIG_LIST = ['2/4', '3/4', '4/4', '6/8'];
+  const BEATS = { '2/4': 2, '3/4': 3, '4/4': 4, '6/8': 6 };
+  const FREQ = { accent: 1600, second: 1250, normal: 1000 };   // Hz
+  const VOL  = { accent: 1.0,  second: 0.8,  normal: 0.6 };
+  const LOOKAHEAD = 0.12;   // 秒：預先排入音訊時鐘的範圍
+  const TICK_MS = 25;       // 排程器檢查間隔
+  const STORE_KEY = 'classMetronome.v1';
+
+  let bpm = 100, sig = '4/4';
+  try {
+    const s = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+    if (s && Number.isFinite(s.bpm)) bpm = clamp(Math.round(s.bpm));
+    if (s && BEATS[s.sig]) sig = s.sig;
+  } catch (e) {}
+
+  function clamp(v) { return Math.min(MAX, Math.max(MIN, v)); }
+  function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify({ bpm, sig })); } catch (e) {} }
+  function beatType(i, s) {
+    if (i === 0) return 'accent';
+    if (s === '6/8' && i === 3) return 'second';
+    return 'normal';
+  }
+
+  /* ---------- 介面元素 ---------- */
+  const $ = id => document.getElementById(id);
+  const digitsEl = $('digits'), bpmText = $('bpmText'), noteGlyph = $('noteGlyph'), slider = $('slider');
+  const padsEl = $('pads'), sigsEl = $('sigs');
+  const startBtn = $('start'), startTxt = $('startTxt'), tapBtn = $('tap'), tapHint = $('tapHint');
+  let dots = [];
+
+  /* 七段顯示器 */
+  const SEG = {
+    a: '12,3 44,3 49,8 44,13 12,13 7,8',
+    b: '50,10 55,15 55,43 50,48 45,43 45,15',
+    c: '50,52 55,57 55,85 50,90 45,85 45,57',
+    d: '12,87 44,87 49,92 44,97 12,97 7,92',
+    e: '6,52 11,57 11,85 6,90 1,85 1,57',
+    f: '6,10 11,15 11,43 6,48 1,43 1,15',
+    g: '12,45 44,45 49,50 44,55 12,55 7,50'
+  };
+  const DIGIT = ['abcdef', 'bc', 'abdeg', 'abcdg', 'bcfg', 'acdfg', 'acdefg', 'abc', 'abcdefg', 'abcdfg'];
+  const digitSegs = [];
+  for (let i = 0; i < 3; i++) {
+    const wrap = document.createElement('div');
+    wrap.innerHTML = '<svg viewBox="0 0 68 100" xmlns="http://www.w3.org/2000/svg"><g transform="translate(11 0) skewX(-6)">' +
+      Object.keys(SEG).map(k => '<polygon class="seg" data-s="' + k + '" points="' + SEG[k] + '"/>').join('') +
+      '</g></svg>';
+    const svg = wrap.firstChild;
+    digitsEl.appendChild(svg);
+    const map = {};
+    svg.querySelectorAll('.seg').forEach(p => { map[p.dataset.s] = p; });
+    digitSegs.push(map);
+  }
+  function renderDigits(n) {
+    const str = String(n).padStart(3, ' ');
+    for (let i = 0; i < 3; i++) {
+      const ch = str[i];
+      const on = ch === ' ' ? '' : DIGIT[+ch];
+      for (const k in SEG) digitSegs[i][k].classList.toggle('on', on.includes(k));
+    }
+  }
+
+  function renderDots() {
+    const n = BEATS[sig];
+    padsEl.innerHTML = '';
+    dots = [];
+    for (let i = 0; i < n; i++) {
+      const col = document.createElement('div');
+      const t = beatType(i, sig);
+      col.className = 'pad-col' + (t === 'normal' ? '' : ' ' + t);
+      col.innerHTML = '<span class="led"></span><span class="pad"></span><span class="num">' + (i + 1) + '</span>';
+      padsEl.appendChild(col);
+      dots.push(col);
+    }
+    litIdx = -1;
+  }
+
+  function renderSig() {
+    sigsEl.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.sig === sig)));
+    noteGlyph.textContent = sig === '6/8' ? '♪' : '♩';
+    renderDots();
+  }
+
+  function setBpm(v) {
+    bpm = clamp(Math.round(v));
+    renderDigits(bpm);
+    bpmText.textContent = '每分鐘 ' + bpm + ' 拍';
+    slider.value = bpm;
+    save();
+  }
+
+  function setSig(s) {
+    if (!BEATS[s] || s === sig) return;
+    sig = s;
+    renderSig();
+    if (playing) resetPending = true;   // 下一拍從新拍號的第 1 拍開始
+    save();
+  }
+
+  /* ---------- 聲音 ---------- */
+  let ctx = null, master = null;
+  function ensureCtx() {
+    if (!ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      ctx = new AC({ latencyHint: 'interactive' });
+      master = ctx.createGain();
+      master.gain.value = 0.9;
+      master.connect(ctx.destination);
+    }
+    if (ctx.state !== 'running') ctx.resume();
+  }
+
+  function click(t, type) {
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(FREQ[type], t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(VOL[type], t + 0.002);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+    o.connect(g); g.connect(master);
+    o.start(t);
+    o.stop(t + 0.07);
+  }
+
+  /* ---------- 排程（預排程，避免漂移） ---------- */
+  let playing = false, nextTime = 0, beat = 0, resetPending = false;
+  let queue = [];   // 給畫面用：{ beat, time }
+
+  function scheduler() {
+    if (!playing || !ctx) return;
+    const now = ctx.currentTime;
+    if (nextTime < now - 0.05) nextTime = now + 0.05;
+    while (nextTime < now + LOOKAHEAD) {
+      const n = BEATS[sig];
+      if (resetPending) { beat = 0; resetPending = false; }
+      if (beat >= n) beat = 0;
+      click(nextTime, beatType(beat, sig));
+      queue.push({ beat, time: nextTime });
+      nextTime += 60 / bpm;
+      beat = (beat + 1) % n;
+    }
+  }
+
+  // 計時器放在 Web Worker，分頁切到背景也不會被降速；不支援時改用 setInterval
+  let worker = null, workerAlive = false, fallbackId = null;
+  try {
+    const src = 'let id=null;onmessage=e=>{clearInterval(id);id=null;if(e.data==="start")id=setInterval(()=>postMessage(0),' + TICK_MS + ');};';
+    worker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+    worker.onmessage = () => { workerAlive = true; scheduler(); };
+    worker.onerror = () => { worker = null; if (playing) useFallback(); };
+  } catch (e) { worker = null; }
+
+  function useFallback() {
+    if (fallbackId === null) fallbackId = setInterval(scheduler, TICK_MS);
+  }
+  function startTimer() {
+    if (worker) {
+      worker.postMessage('start');
+      setTimeout(() => { if (playing && !workerAlive) useFallback(); }, 300);
+    } else {
+      useFallback();
+    }
+  }
+  function stopTimer() {
+    if (worker) worker.postMessage('stop');
+    if (fallbackId !== null) { clearInterval(fallbackId); fallbackId = null; }
+  }
+
+  /* ---------- 打擊墊閃動（以音訊時鐘對齊聲音） ---------- */
+  let litIdx = -1, litTime = 0;
+  function draw() {
+    if (playing && ctx) {
+      const lat = ctx.outputLatency || ctx.baseLatency || 0;
+      const heard = ctx.currentTime - lat;
+      while (queue.length && queue[0].time <= heard) {
+        const q = queue.shift();
+        if (litIdx >= 0 && dots[litIdx]) dots[litIdx].classList.remove('on');
+        litIdx = q.beat;
+        litTime = q.time;
+        if (dots[litIdx]) dots[litIdx].classList.add('on');
+      }
+      if (litIdx >= 0 && heard - litTime > Math.min(0.15, 30 / bpm)) {
+        if (dots[litIdx]) dots[litIdx].classList.remove('on');
+        litIdx = -1;
+      }
+    }
+    requestAnimationFrame(draw);
+  }
+
+  /* ---------- 開始／停止 ---------- */
+  function start() {
+    ensureCtx();
+    playing = true;
+    beat = 0; resetPending = false; queue = [];
+    nextTime = ctx.currentTime + 0.08;
+    scheduler();
+    startTimer();
+    startTxt.textContent = '停止';
+    startBtn.classList.add('playing');
+    startBtn.setAttribute('aria-pressed', 'true');
+    lockScreen();
+  }
+  function stop() {
+    playing = false;
+    stopTimer();
+    queue = [];
+    dots.forEach(d => d.classList.remove('on'));
+    litIdx = -1;
+    startTxt.textContent = '開始';
+    startBtn.classList.remove('playing');
+    startBtn.setAttribute('aria-pressed', 'false');
+    unlockScreen();
+  }
+  function toggle() { playing ? stop() : start(); }
+
+  /* ---------- 螢幕常亮 ---------- */
+  let wakeLock = null;
+  async function lockScreen() {
+    try { if ('wakeLock' in navigator && !wakeLock) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) { wakeLock = null; }
+    if (wakeLock) wakeLock.addEventListener('release', () => { wakeLock = null; }, { once: true });
+  }
+  function unlockScreen() { try { if (wakeLock) wakeLock.release(); } catch (e) {} wakeLock = null; }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && playing) { lockScreen(); ensureCtx(); }
+  });
+
+  /* ---------- Tap Tempo ---------- */
+  let taps = [], hintTimer = null;
+  function tap() {
+    const t = performance.now();
+    if (taps.length && t - taps[taps.length - 1] > 2000) taps = [];
+    taps.push(t);
+    if (taps.length > 8) taps.shift();
+    if (taps.length >= 2) {
+      const avg = (taps[taps.length - 1] - taps[0]) / (taps.length - 1);
+      setBpm(60000 / avg);
+      tapHint.textContent = '已設為 ' + bpm + '（' + taps.length + ' 下平均）';
+    } else {
+      tapHint.textContent = sig === '6/8' ? '繼續點，請點八分音符' : '繼續點';
+    }
+    tapBtn.classList.add('hit');
+    setTimeout(() => tapBtn.classList.remove('hit'), 90);
+    clearTimeout(hintTimer);
+    hintTimer = setTimeout(() => { tapHint.textContent = '跟著音樂連續點擊'; }, 2500);
+  }
+
+  /* ---------- 事件 ---------- */
+  startBtn.addEventListener('click', toggle);
+
+  slider.addEventListener('input', () => setBpm(+slider.value));
+
+  // ±按鍵：按住可連續調整
+  document.querySelectorAll('[data-step]').forEach(b => {
+    const step = +b.dataset.step;
+    let delay = null, rep = null;
+    const end = () => { clearTimeout(delay); clearInterval(rep); delay = rep = null; };
+    b.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      setBpm(bpm + step);
+      end();
+      delay = setTimeout(() => { rep = setInterval(() => setBpm(bpm + step), 90); }, 450);
+    });
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, end));
+    b.addEventListener('click', e => { if (e.detail === 0) setBpm(bpm + step); });  // 鍵盤 Enter
+  });
+
+  sigsEl.addEventListener('click', e => {
+    const b = e.target.closest('[data-sig]');
+    if (b) setSig(b.dataset.sig);
+  });
+
+  tapBtn.addEventListener('pointerdown', e => { e.preventDefault(); tap(); });
+  tapBtn.addEventListener('click', e => { if (e.detail === 0) tap(); });
+
+  document.addEventListener('keydown', e => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    switch (e.code) {
+      case 'Space': e.preventDefault(); if (!e.repeat) toggle(); break;
+      case 'ArrowUp': e.preventDefault(); setBpm(bpm + 1); break;
+      case 'ArrowDown': e.preventDefault(); setBpm(bpm - 1); break;
+      case 'ArrowRight': e.preventDefault(); setBpm(bpm + 5); break;
+      case 'ArrowLeft': e.preventDefault(); setBpm(bpm - 5); break;
+      case 'KeyT': if (!e.repeat) tap(); break;
+      case 'Digit1': case 'Digit2': case 'Digit3': case 'Digit4':
+        setSig(SIG_LIST[+e.code.slice(-1) - 1]); break;
+    }
+  });
+  document.addEventListener('keyup', e => { if (e.code === 'Space') e.preventDefault(); });
+
+  /* ---------- 初始化 ---------- */
+  setBpm(bpm);
+  renderSig();
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>
